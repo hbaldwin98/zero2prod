@@ -1,0 +1,16 @@
+FROM rust:latest
+
+# Install sqlx CLI
+RUN cargo install sqlx-cli --no-default-features --features rustls,postgres
+
+# Copy your application code (if necessary)
+WORKDIR /app
+COPY . .
+
+RUN apt-get update && apt-get install -y bash
+
+# Add the entrypoint script
+COPY entrypoint.sh .
+RUN chmod u+x ./entrypoint.sh
+
+ENTRYPOINT ["/bin/bash", "/app/entrypoint.sh"]
