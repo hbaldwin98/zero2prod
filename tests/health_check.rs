@@ -11,7 +11,7 @@ use zero2prod::{
 static TRACING: Lazy<()> = Lazy::new(|| {
     let settings = config::Config::builder()
         .add_source(config::File::new(
-            "configuration.test.yaml",
+            "configuration/test.yaml",
             config::FileFormat::Yaml,
         ))
         .build()
