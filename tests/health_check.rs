@@ -1,15 +1,59 @@
-use std::net::TcpListener;
-
+use once_cell::sync::Lazy;
+use secrecy::ExposeSecret;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
+use std::net::TcpListener;
 use uuid::Uuid;
-use zero2prod::configuration::{get_configuration, DatabaseSettings};
+use zero2prod::{
+    configuration::{get_configuration, DatabaseSettings},
+    telemetry::{get_subscriber, init_subscriber},
+};
+
+static TRACING: Lazy<()> = Lazy::new(|| {
+    let settings = config::Config::builder()
+        .add_source(config::File::new(
+            "configuration.test.yaml",
+            config::FileFormat::Yaml,
+        ))
+        .build()
+        .expect("Failed to build configuration");
+
+    let use_log = settings.get::<bool>("test_log").unwrap_or(false);
+
+    if use_log {
+        let subscriber = get_subscriber("test".into(), "debug".into(), std::io::stdout);
+        init_subscriber(subscriber);
+    } else {
+        let subscriber = get_subscriber("test".into(), "debug".into(), std::io::sink);
+        init_subscriber(subscriber);
+    }
+});
 
 pub struct TestApp {
     pub address: String,
     pub db_pool: PgPool,
+    pub db_name: String,
+    pub connection_string: String,
+}
+
+impl TestApp {
+    async fn drop(&mut self) {
+        let db_pool = self.db_pool.clone();
+        db_pool.close().await;
+
+        PgConnection::connect(&self.connection_string)
+            .await
+            .expect("Failed to connect to the database")
+            .execute(&*format!(r#"DROP DATABASE "{}""#, self.db_name))
+            .await
+            .expect("Failed to drop the database");
+
+        tracing::info!("Dropped test database");
+    }
 }
 
 async fn spawn_app() -> TestApp {
+    Lazy::force(&TRACING);
+
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
     let port = listener.local_addr().unwrap().port();
     let address = format!("http://127.0.0.1:{}", port);
@@ -24,16 +68,26 @@ async fn spawn_app() -> TestApp {
 
     let _ = tokio::spawn(server);
 
+    let db_name = configuration.database.database_name.clone();
+    let connection_string = configuration
+        .database
+        .connection_string_without_db()
+        .expose_secret()
+        .clone();
+
     return TestApp {
         address,
         db_pool: connection_pool,
+        db_name,
+        connection_string,
     };
 }
 
 pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
-    let mut connection = PgConnection::connect(&mut config.connection_string_without_db())
-        .await
-        .expect("Failed to connect to Postgres");
+    let mut connection =
+        PgConnection::connect(&mut config.connection_string_without_db().expose_secret())
+            .await
+            .expect("Failed to connect to Postgres");
 
     connection
         .execute(format!(r#"CREATE DATABASE "{}";"#, config.database_name).as_str())
@@ -41,7 +95,7 @@ pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
         .expect("Failed to create database");
 
     // MIGRATE DATABASE
-    let connection_pool = PgPool::connect(&config.connection_string())
+    let connection_pool = PgPool::connect(&config.connection_string().expose_secret())
         .await
         .expect("Failed to connect to Postgres");
 
@@ -56,7 +110,7 @@ pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
 #[tokio::test]
 async fn health_check_works() {
     // Arrange
-    let app = spawn_app().await;
+    let mut app = spawn_app().await;
     let client = reqwest::Client::new();
 
     // Act
@@ -69,12 +123,14 @@ async fn health_check_works() {
     // Assert
     assert!(response.status().is_success());
     assert_eq!(Some(0), response.content_length());
+
+    app.drop().await;
 }
 
 #[tokio::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
     // Arrange
-    let app = spawn_app().await;
+    let mut app = spawn_app().await;
     let client = reqwest::Client::new();
     //
     // Act
@@ -97,13 +153,16 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
 
     assert_eq!(saved.email, "ursula_le_guin@gmail.com");
     assert_eq!(saved.name, "le guin");
+
+    app.drop().await;
 }
 
 #[tokio::test]
 async fn subscribe_returns_a_400_when_data_is_missing() {
     // Arrange
-    let app = spawn_app().await;
+    let mut app = spawn_app().await;
     let client = reqwest::Client::new();
+
     let test_cases = vec![
         ("name=le%20guin", "missing the email"),
         ("email=ursula_la_guin%40@gmail.com", "missing the name"),
@@ -129,4 +188,6 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
             error_message
         );
     }
+
+    app.drop().await;
 }
