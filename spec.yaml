@@ -23,7 +23,7 @@ services:
       - key: APP_DATABASE__PASSWORD
         scope: RUN_TIME
         value: ${newsletter.PASSWORD}
-      - key: APP_DATABASE__HOSTNAME
+      - key: APP_DATABASE__HOST
         scope: RUN_TIME
         value: ${newsletter.HOSTNAME}
       - key: APP_DATABASE__PORT
@@ -37,4 +37,4 @@ databases:
     name: newsletter
     num_nodes: 1
     size: db-s-dev-database
-    version: "12"
+    version: "14"
