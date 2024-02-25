@@ -6,3 +6,9 @@ database:
   username: "user"
   password: "password"
   database_name: "newsletter"
+email_client:
+  base_url: "localhost"
+  sender_email: "test@gmail.com"
+  api_key_public: "my-public-api-key"
+  api_key_private: "my-private-api-key"
+  timeout_ms: 10000
