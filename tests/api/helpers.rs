@@ -9,17 +9,9 @@ use zero2prod::{
 };
 
 static TRACING: Lazy<()> = Lazy::new(|| {
-    let settings = config::Config::builder()
-        .add_source(config::File::new(
-            "configuration/test.yaml",
-            config::FileFormat::Yaml,
-        ))
-        .build()
-        .expect("Failed to build configuration");
+    let use_log = std::env::var("USE_LOG").unwrap_or("false".into());
 
-    let use_log = settings.get::<bool>("test_log").unwrap_or(false);
-
-    if use_log {
+    if use_log.to_lowercase() == "true" {
         let subscriber = get_subscriber("test".into(), "debug".into(), std::io::stdout);
         init_subscriber(subscriber);
     } else {

@@ -24,10 +24,7 @@ impl EmailClient {
         timeout: std::time::Duration,
     ) -> Self {
         Self {
-            http_client: Client::builder()
-                .timeout(timeout)
-                .build()
-                .unwrap(),
+            http_client: Client::builder().timeout(timeout).build().unwrap(),
             base_url,
             sender,
             api_key_public,
@@ -57,7 +54,7 @@ impl EmailClient {
             html_part,
         };
 
-        let credentials: String = general_purpose::STANDARD.encode(&format!(
+        let credentials: String = general_purpose::STANDARD.encode(format!(
             "{}:{}",
             self.api_key_public.expose_secret(),
             self.api_key_private.expose_secret()
