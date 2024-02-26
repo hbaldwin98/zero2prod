@@ -40,14 +40,23 @@ impl TestApp {
         let db_pool = self.db_pool.clone();
         db_pool.close().await;
 
-        PgConnection::connect(&self.connection_string)
+        _ = PgConnection::connect(&self.connection_string)
             .await
             .expect("Failed to connect to the database")
             .execute(&*format!(r#"DROP DATABASE "{}""#, self.db_name))
-            .await
-            .expect("Failed to drop the database");
+            .await;
 
         tracing::info!("Dropped test database");
+    }
+
+    pub async fn post_subscriptions(&self, body: String) -> reqwest::Response {
+        reqwest::Client::new()
+            .post(&format!("{}/subscriptions", &self.address))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(body)
+            .send()
+            .await
+            .expect("Failed to execute request")
     }
 }
 
