@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::{
     domain::{NewSubscriber, SubscriberEmail, SubscriberName},
     email_client::EmailClient,
+    routes::error_chain_fmt,
     startup::ApplicationBaseUrl,
 };
 
@@ -198,20 +199,4 @@ pub async fn store_token(
 
 fn generate_subscription_token() -> String {
     Uuid::new_v4().to_string()
-}
-
-fn error_chain_fmt(
-    e: &impl std::error::Error,
-    f: &mut std::fmt::Formatter<'_>,
-) -> std::fmt::Result {
-    writeln!(f, "{}", e)?;
-
-    let mut current = e.source();
-
-    while let Some(cause) = current {
-        writeln!(f, "Caused by: {}", cause)?;
-        current = cause.source();
-    }
-
-    Ok(())
 }

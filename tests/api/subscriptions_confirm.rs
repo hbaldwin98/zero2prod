@@ -74,3 +74,31 @@ async fn clicking_on_the_confirmation_link_confirms_a_subscriber() {
 
     app.drop().await;
 }
+
+#[tokio::test]
+async fn subscribing_fatal_fails_returns_a_500() {
+    let mut app = spawn_app().await;
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+
+    Mock::given(path("/v3.1/send"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&app.email_server)
+        .await;
+
+    app.post_subscriptions(body.into()).await;
+
+    let email_request = &app.email_server.received_requests().await.unwrap()[0];
+    let confirmation_links = app.get_confirmation_link(email_request).await;
+
+    sqlx::query!("ALTER TABLE subscription_tokens DROP COLUMN subscription_token;")
+        .execute(&app.db_pool)
+        .await
+        .expect("Failed to drop the subscriptions table");
+
+    let response = reqwest::get(confirmation_links.html).await.unwrap();
+
+    assert_eq!(response.status().as_u16(), 500);
+
+    app.drop().await;
+}
