@@ -83,6 +83,7 @@ pub fn run(
         App::new()
             .wrap(Compat::new(TracingLogger::default()))
             .route("/health_check", web::get().to(health_check))
+            .route("/newsletters", web::post().to(publish_newsletter))
             .route("/subscriptions", web::post().to(subscribe))
             .route("/subscriptions/confirm", web::get().to(confirm))
             .app_data(connection_pool.clone())
